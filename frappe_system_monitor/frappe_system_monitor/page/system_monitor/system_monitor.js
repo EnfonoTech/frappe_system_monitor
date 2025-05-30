@@ -17,27 +17,24 @@ MyPage = Class.extend({
 	make: function(){
 		$(frappe.render_template(`
 			<div class="container-fluid">
+				<div class="col-md-6"id="desc_table" style="padding: 10px;"></div>
 				<div class="row">
-					<div class="col-md-4" id="desc_table" style="padding: 10px;"></div>
-
-					<div class="col-md-8">
-						<div class="row text-center">
-							<div class="col-md-4 mb-4">
-								<h4>CPU Usage</h4>
-								<div id="cpu_chart" style="height: 200px;"></div>
-							</div>
-							<div class="col-md-4 mb-4">
-								<h4>RAM Usage</h4>
-								<div id="ram_chart" style="height: 200px;"></div>
-							</div>
-							<div class="col-md-4 mb-4">
-								<h4>Disk Usage</h4>
-								<div id="disk_chart" style="height: 200px;"></div>
-							</div>
+						<div class="col-md-4">
+							<h4>CPU Usage</h4>
+							<div id="cpu_chart" style="height: 200px;"></div>
+							<p id="cpu_usage_text" class="mt-2 text-center"></p>
 						</div>
-					</div>
+						<div class="col-md-4">
+							<h4>RAM Usage</h4>
+							<div id="ram_chart" style="height: 200px;"></div>
+							<p id="ram_usage_text" class="mt-2 text-center"></p>
+						</div>
+						<div class="col-md-4">
+							<h4>Disk Usage</h4>
+							<div id="disk_chart" style="height: 200px;"></div>
+							<p id="disk_usage_text" class=" mt-2 text-center"></p>
+						</div>
 				</div>
-
 				<hr>
 				<h4 class="text-center">CPU Frequency History</h4>
 				<div id="cpu_frequency_div" style="width: 100%; height: 400px;"></div>
@@ -54,12 +51,15 @@ let disk_chart = null;
 let freq_chart = null;
 let time_labels = [];
 let freq_data_by_cpu = [];
+let cpu_usage_data = { name: "CPU", values: [] };
+let ram_usage_data = { name: "RAM", values: [] };
+let disk_usage_data = { name: "Disk", values: [] };
 
 let chart_data = () => {
 	get_chart_data();
 	setInterval(() => {
 		get_chart_data();
-	}, 3000);
+	}, 60000);
 };
 
 let get_chart_data = () => {
@@ -76,35 +76,60 @@ let get_chart_data = () => {
 };
 
 let render_resource_charts = (data) => {
-	const cpu_data = {
-		labels: ["CPU"],
-		datasets: [{
-			name: "CPU",
-			values: [data.cpu.percent]
-		}]
-	};
-	const ram_data = {
-		labels: ["RAM"],
-		datasets: [{
-			name: "RAM",
-			values: [data.memory.percent]
-		}]
-	};
-	const disk_data = {
-		labels: ["Disk"],
-		datasets: [{
-			name: "Disk",
-			values: [data.disk.percent]
-		}]
-	};
+	const now = new Date().toLocaleTimeString();
 
+	if (time_labels.length >= 20) time_labels.shift();
+	time_labels.push(now);
+
+	// CPU
+	if (cpu_usage_data.values.length >= 20) cpu_usage_data.values.shift();
+	cpu_usage_data.values.push(data.cpu.percent);
+
+	const cpu_data = {
+		labels: [...time_labels],
+		datasets: [cpu_usage_data]
+	};
+	document.getElementById("cpu_usage_text").innerText =
+		`${data.cpu.used.toFixed(2)} / ${data.cpu.total} Cores`;
+
+	// RAM
+	if (ram_usage_data.values.length >= 20) ram_usage_data.values.shift();
+	ram_usage_data.values.push(data.memory.percent);
+
+	const ram_data = {
+		labels: [...time_labels],
+		datasets: [ram_usage_data]
+	};
+	document.getElementById("ram_usage_text").innerText =
+		`${(data.memory.used / (1024 ** 3)).toFixed(2)} / ${(data.memory.total / (1024 ** 3)).toFixed(2)} GB`;
+
+	// DISK
+	if (disk_usage_data.values.length >= 20) disk_usage_data.values.shift();
+	disk_usage_data.values.push(data.disk.percent);
+
+	const disk_data = {
+		labels: [...time_labels],
+		datasets: [disk_usage_data]
+	};
+	document.getElementById("disk_usage_text").innerText =
+		`${(data.disk.used / (1024 ** 3)).toFixed(2)} / ${(data.disk.total / (1024 ** 3)).toFixed(2)} GB`;
+
+	// Create or Update Charts
 	if (!cpu_chart) {
 		cpu_chart = new frappe.Chart("#cpu_chart", {
 			title: "CPU Usage (%)",
 			data: cpu_data,
-			type: "bar",
+			type: "line",
 			height: 200,
-			colors: ['#f39c12']
+			colors: ['#f39c12'],
+			lineOptions: {
+				regionFill: 1, 
+			},
+			areaOptions: {
+				showArea: true, 
+				opacity: 0.1,   
+			}
+			
 		});
 	} else {
 		cpu_chart.update(cpu_data);
@@ -114,10 +139,17 @@ let render_resource_charts = (data) => {
 		ram_chart = new frappe.Chart("#ram_chart", {
 			title: "RAM Usage (%)",
 			data: ram_data,
-			type: "bar",
+			type: "line",
 			height: 200,
-			colors: ['#3498db']
-		});
+			colors: ['#3498db'],
+			lineOptions: {
+				regionFill: 1,
+			},
+			areaOptions: {
+				showArea: true, 
+				opacity: 0.1,   
+			}
+			});
 	} else {
 		ram_chart.update(ram_data);
 	}
@@ -126,9 +158,16 @@ let render_resource_charts = (data) => {
 		disk_chart = new frappe.Chart("#disk_chart", {
 			title: "Disk Usage (%)",
 			data: disk_data,
-			type: "bar",
+			type: "line",
 			height: 200,
-			colors: ['#2ecc71']
+			colors: ['#2ecc71'],
+			lineOptions: {
+				regionFill: 1,
+			},
+			areaOptions: {
+				showArea: true,
+				opacity: 0.1,   
+			}
 		});
 	} else {
 		disk_chart.update(disk_data);
@@ -146,7 +185,7 @@ let render_freq_chart = (cpu) => {
 	if (freq_data_by_cpu.length === 0) {
 		cores.forEach((core, index) => {
 			freq_data_by_cpu.push({
-				name: `CPU ${core}`,
+				name: `${core}`,
 				values: [values[index]]
 			});
 		});
@@ -168,7 +207,14 @@ let render_freq_chart = (cpu) => {
 			data: freq_data,
 			type: "line",
 			height: 300,
-			colors: ['#e74c3c', '#9b59b6', '#1abc9c', '#34495e', '#f1c40f', '#e67e22', '#7f8c8d']
+			colors: ['#e74c3c', '#9b59b6', '#1abc9c', '#34495e', '#f1c40f', '#e67e22', '#7f8c8d'],
+			lineOptions: {
+				regionFill: 1,
+			},
+			areaOptions: {
+				showArea: true, 
+				opacity: 0.3,   
+			}
 		});
 	} else {
 		freq_chart.update(freq_data);
